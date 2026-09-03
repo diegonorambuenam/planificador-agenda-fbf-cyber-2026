@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarDays, Cloud, Database, Gauge, LogOut, Mail, RotateCcw, Upload, Warehouse } from 'lucide-react';
+import { CalendarDays, Cloud, Database, Gauge, LogOut, RotateCcw, Upload, Warehouse } from 'lucide-react';
+import { TeamAccessForm } from '@/src/components/team-access-form';
 import type { WarehouseId } from '@/src/types/planning';
 import { loadBundledSample } from '@/src/services/import-service';
 import { usePlanningStore } from '@/src/store/planning-store';
@@ -26,7 +27,6 @@ type ModelContextTool = {
 export function PlanningShell() {
   const [view, setView] = useState<View>('agenda');
   const [warehouse, setWarehouse] = useState<WarehouseId>('9006');
-  const [email, setEmail] = useState('');
   const hydrated = usePlanningStore((state) => state.hydrated);
   const requests = usePlanningStore((state) => state.requests);
   const importRequests = usePlanningStore((state) => state.importRequests);
@@ -92,17 +92,20 @@ export function PlanningShell() {
   }
 
   if (shared.configured && !shared.session) {
-    return <AccessScreen title="Acceso equipo FBF" description="Ingresa con uno de los tres correos autorizados. Recibirás un enlace de acceso sin contraseña.">
-      <form className="mt-6 space-y-3" onSubmit={(event) => { event.preventDefault(); if (email.trim()) void shared.signIn(email); }}>
-        <label className="field-label text-left">Correo corporativo<input className="field mt-1" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nombre@empresa.com" required /></label>
-        <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2d6b4c] px-4 py-3 text-sm font-extrabold text-white" type="submit"><Mail size={17} /> Enviar enlace de acceso</button>
-        {shared.message && <p className="rounded-xl bg-[#eef5f0] p-3 text-sm font-semibold text-[#356149]">{shared.message}</p>}
-      </form>
+    return <AccessScreen title="Acceso equipo FBF" description="Ingresa con tu usuario. Si es tu primera vez, utiliza el código privado que te entregó el administrador.">
+      <TeamAccessForm key="login" pending={false} message={shared.message} signIn={shared.signIn} activate={shared.activate} />
+    </AccessScreen>;
+  }
+
+  if (shared.configured && shared.account?.pending) {
+    return <AccessScreen title="Crea tu contraseña" description={`Activa el acceso de ${shared.account.username}. El código se utilizará una sola vez.`}>
+      <TeamAccessForm key="activation" pending message={shared.message} signIn={shared.signIn} activate={shared.activate} />
+      <button className="mt-4 text-sm underline" onClick={() => void shared.signOut()}>Cancelar y salir</button>
     </AccessScreen>;
   }
 
   if (shared.configured && shared.authorized === false) {
-    return <AccessScreen title="Correo sin acceso" description={shared.message || 'Este correo no pertenece al equipo autorizado.'}><button onClick={() => void shared.signOut()} className="mt-6 rounded-xl border border-[#bfd0c4] px-4 py-2 text-sm font-bold">Usar otro correo</button></AccessScreen>;
+    return <AccessScreen title="Sesión sin acceso" description={shared.message || 'Este usuario no tiene acceso.'}><button onClick={() => void shared.signOut()} className="mt-6 rounded-xl border border-[#bfd0c4] px-4 py-2 text-sm font-bold">Volver a ingresar</button></AccessScreen>;
   }
 
   return <main className="min-h-screen bg-[#f4f7f4] text-[#17372b]">

@@ -1,5 +1,7 @@
 # Activar capacidades compartidas con Supabase
 
+> La nueva configuración por usuario y código de activación está en [supabase/USERNAME_ACCESS.md](supabase/USERNAME_ACCESS.md). Las instrucciones siguientes corresponden al acceso anterior por correo; no aplicarlas al nuevo flujo.
+
 La aplicación ya funciona en modo local. Al completar esta configuración, las capacidades se guardarán en Supabase y se actualizarán en vivo para los tres integrantes autorizados.
 
 ## 1. Crear y preparar el proyecto

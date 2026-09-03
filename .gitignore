@@ -39,3 +39,6 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+/private/
+/.credentials/
+*.secrets.*
