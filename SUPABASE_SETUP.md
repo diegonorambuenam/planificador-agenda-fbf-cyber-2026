@@ -28,6 +28,14 @@ En **Authentication > URL Configuration**:
 
 El acceso usa un enlace enviado por correo, sin contraseñas compartidas.
 
+### Requisito: proveedor de correo SMTP
+
+Configura un proveedor autorizado en **Authentication > Emails > SMTP Settings** antes de usar el acceso con el equipo. El correo integrado de Supabase solo envía a miembros de la organización administrativa de Supabase; registrar correos en `team_members` no elimina esa restricción. No es necesario dar acceso al panel administrativo a los usuarios de la aplicación.
+
+Se requieren host, puerto, usuario, contraseña SMTP y dirección de remitente verificada. Las credenciales SMTP se guardan únicamente en Supabase, nunca en GitHub Pages ni en el repositorio.
+
+Documentación: https://supabase.com/docs/guides/auth/auth-smtp
+
 ## 3. Conectar GitHub Pages
 
 En Supabase abre **Project Settings > API** y copia:
