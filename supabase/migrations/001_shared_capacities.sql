@@ -85,8 +85,20 @@ for each row execute function public.stamp_capacity_change();
 grant select on public.team_members to authenticated;
 grant select, insert, update on public.capacities to authenticated;
 
--- Permite recibir los cambios de otros integrantes sin recargar la página.
-alter publication supabase_realtime add table public.capacities;
+-- Permite recibir cambios sin recargar y también puede ejecutarse más de una vez.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'capacities'
+  ) then
+    execute 'alter publication supabase_realtime add table public.capacities';
+  end if;
+end;
+$$;
 
 -- Después de ejecutar la migración, reemplaza los correos y ejecuta:
 -- insert into public.team_members (email, display_name) values
