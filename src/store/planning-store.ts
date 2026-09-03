@@ -30,6 +30,8 @@ interface PlanningState {
   importRequests: (requests: AgendaRequest[]) => void;
   assignNumber: (number: string, date: string | null) => void;
   setCapacity: (warehouse: WarehouseId, date: string, capacity: number) => void;
+  replaceCapacities: (capacities: Record<string, number>) => void;
+  mergeCapacities: (capacities: Record<string, number>) => void;
   setPriority: (number: string, priority: Priority) => void;
   resetPlanning: () => void;
 }
@@ -73,6 +75,8 @@ export const usePlanningStore = create<PlanningState>()(
         }),
       setCapacity: (warehouse, date, capacity) =>
         set((state) => ({ capacities: { ...state.capacities, [capacityKey(warehouse, date)]: capacity } })),
+      replaceCapacities: (capacities) => set({ capacities }),
+      mergeCapacities: (capacities) => set((state) => ({ capacities: { ...state.capacities, ...capacities } })),
       setPriority: (number, priority) =>
         set((state) => ({
           requests: state.requests.map((request) => request.number === number ? { ...request, priority } : request),
@@ -80,7 +84,6 @@ export const usePlanningStore = create<PlanningState>()(
         })),
       resetPlanning: () => set((state) => ({
         requests: state.requests.map((request) => ({ ...request, fechaDefinitiva: null, planningStatus: (request.validationStatus === 'error' ? 'Con problema' : 'Pendiente') as AgendaRequest['planningStatus'], priority: 'Normal' as Priority, planningComment: '' })),
-        capacities: {},
         history: [],
       })),
     }),

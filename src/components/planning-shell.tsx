@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarDays, Database, Gauge, RotateCcw, Upload, Warehouse } from 'lucide-react';
+import { CalendarDays, Cloud, Database, Gauge, LogOut, Mail, RotateCcw, Upload, Warehouse } from 'lucide-react';
 import type { WarehouseId } from '@/src/types/planning';
 import { loadBundledSample } from '@/src/services/import-service';
 import { usePlanningStore } from '@/src/store/planning-store';
 import { AgendaBoard } from '@/src/features/agenda/agenda-board';
 import { CapacityView } from '@/src/features/capacity/capacity-view';
 import { ImportView } from '@/src/features/imports/import-view';
+import { useSharedCapacities } from '@/src/hooks/use-shared-capacities';
 
 type View = 'agenda' | 'capacity' | 'import';
 
@@ -25,11 +26,13 @@ type ModelContextTool = {
 export function PlanningShell() {
   const [view, setView] = useState<View>('agenda');
   const [warehouse, setWarehouse] = useState<WarehouseId>('9006');
+  const [email, setEmail] = useState('');
   const hydrated = usePlanningStore((state) => state.hydrated);
   const requests = usePlanningStore((state) => state.requests);
   const importRequests = usePlanningStore((state) => state.importRequests);
   const resetPlanning = usePlanningStore((state) => state.resetPlanning);
   const history = usePlanningStore((state) => state.history);
+  const shared = useSharedCapacities();
 
   useEffect(() => {
     if (!hydrated || requests.length) return;
@@ -81,7 +84,25 @@ export function PlanningShell() {
   }, []);
 
   function confirmReset() {
-    if (window.confirm('Se eliminarán fechas definitivas, capacidades y el historial local. El archivo importado se conservará. ¿Continuar?')) resetPlanning();
+    if (window.confirm('Se eliminarán las fechas definitivas y el historial local. Las capacidades compartidas se conservarán. ¿Continuar?')) resetPlanning();
+  }
+
+  if (shared.configured && (!shared.initialized || (shared.session && shared.authorized == null))) {
+    return <AccessScreen title="Conectando con Supabase" description="Estamos validando tu sesión y recuperando las capacidades del equipo." />;
+  }
+
+  if (shared.configured && !shared.session) {
+    return <AccessScreen title="Acceso equipo FBF" description="Ingresa con uno de los tres correos autorizados. Recibirás un enlace de acceso sin contraseña.">
+      <form className="mt-6 space-y-3" onSubmit={(event) => { event.preventDefault(); if (email.trim()) void shared.signIn(email); }}>
+        <label className="field-label text-left">Correo corporativo<input className="field mt-1" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nombre@empresa.com" required /></label>
+        <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2d6b4c] px-4 py-3 text-sm font-extrabold text-white" type="submit"><Mail size={17} /> Enviar enlace de acceso</button>
+        {shared.message && <p className="rounded-xl bg-[#eef5f0] p-3 text-sm font-semibold text-[#356149]">{shared.message}</p>}
+      </form>
+    </AccessScreen>;
+  }
+
+  if (shared.configured && shared.authorized === false) {
+    return <AccessScreen title="Correo sin acceso" description={shared.message || 'Este correo no pertenece al equipo autorizado.'}><button onClick={() => void shared.signOut()} className="mt-6 rounded-xl border border-[#bfd0c4] px-4 py-2 text-sm font-bold">Usar otro correo</button></AccessScreen>;
   }
 
   return <main className="min-h-screen bg-[#f4f7f4] text-[#17372b]">
@@ -93,12 +114,16 @@ export function PlanningShell() {
           <NavButton active={view === 'capacity'} onClick={() => setView('capacity')} icon={<Gauge size={15} />} label="Capacidad" />
           <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload size={15} />} label="Importar" />
         </nav>
-        <div className="flex items-center gap-2"><div className="hidden items-center gap-1.5 text-[11px] font-semibold text-[#6c7d74] xl:flex"><Database size={14} className="text-[#3d7b59]" /> Guardado local · {history.length} cambios</div><button onClick={confirmReset} className="icon-button" title="Reiniciar planificación"><RotateCcw size={16} /></button></div>
+        <div className="flex items-center gap-2"><div className="hidden items-center gap-1.5 text-[11px] font-semibold text-[#6c7d74] xl:flex">{shared.configured ? <><Cloud size={14} className="text-[#3d7b59]" /> Supabase · {shared.session?.user.email}</> : <><Database size={14} className="text-[#3d7b59]" /> Modo local · {history.length} cambios</>}</div>{shared.configured && <button onClick={() => void shared.signOut()} className="icon-button" title="Cerrar sesión"><LogOut size={16} /></button>}<button onClick={confirmReset} className="icon-button" title="Reiniciar planificación"><RotateCcw size={16} /></button></div>
       </div>
     </header>
     <div className="border-b border-[#dce5df] bg-white px-4 py-2 md:hidden"><div className="mx-auto flex max-w-[1800px] gap-1"><NavButton active={view === 'agenda'} onClick={() => setView('agenda')} icon={<Warehouse size={15} />} label="Agenda" /><NavButton active={view === 'capacity'} onClick={() => setView('capacity')} icon={<Gauge size={15} />} label="Capacidad" /><NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload size={15} />} label="Importar" /></div></div>
-    {!hydrated ? <div className="grid min-h-[60vh] place-items-center text-sm font-semibold text-[#6d7c74]">Recuperando planificación local…</div> : view === 'agenda' ? <AgendaBoard warehouse={warehouse} onWarehouseChange={setWarehouse} /> : view === 'capacity' ? <CapacityView warehouse={warehouse} /> : <ImportView onDone={() => setView('agenda')} />}
+    {!hydrated ? <div className="grid min-h-[60vh] place-items-center text-sm font-semibold text-[#6d7c74]">Recuperando planificación local…</div> : view === 'agenda' ? <AgendaBoard warehouse={warehouse} onWarehouseChange={setWarehouse} /> : view === 'capacity' ? <CapacityView warehouse={warehouse} saveCapacities={shared.saveCapacities} syncMessage={shared.configured ? shared.message : 'Modo local: configura Supabase para compartir los cambios'} syncStatus={shared.status} /> : <ImportView onDone={() => setView('agenda')} />}
   </main>;
+}
+
+function AccessScreen({ title, description, children }: { title: string; description: string; children?: React.ReactNode }) {
+  return <main className="grid min-h-screen place-items-center bg-[#f4f7f4] p-6 text-[#17372b]"><section className="w-full max-w-md rounded-3xl border border-[#d8e2db] bg-white p-8 text-center shadow-[0_24px_70px_rgba(31,72,52,.10)]"><div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl bg-[#2d6b4c] text-white"><Cloud size={25} /></div><p className="eyebrow">Planificador FBF</p><h1 className="mt-2 text-2xl font-extrabold">{title}</h1><p className="mt-2 text-sm leading-6 text-[#65756c]">{description}</p>{children}</section></main>;
 }
 
 function NavButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
