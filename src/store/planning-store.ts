@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { openDB } from 'idb';
+import { mergeSourceRequests } from '@/src/services/source-normalization';
 import type { AgendaRequest, ChangeLog, EventConfig, Priority, WarehouseId } from '@/src/types/planning';
 
 const storage = {
@@ -53,7 +54,7 @@ export const usePlanningStore = create<PlanningState>()(
         planningEnd: '2026-10-02',
       },
       setHydrated: (hydrated) => set({ hydrated }),
-      importRequests: (requests) => set({ requests, history: [] }),
+      importRequests: (requests) => set((state) => ({ requests: mergeSourceRequests(state.requests, requests) })),
       assignNumber: (number, date) =>
         set((state) => {
           const current = state.requests.find((request) => request.number === number);

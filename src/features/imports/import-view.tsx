@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, FileSpreadsheet, UploadCloud } from 'lucid
 import { parseAgendaFile, SOURCE_COLUMNS } from '@/src/services/import-service';
 import { usePlanningStore } from '@/src/store/planning-store';
 import { numberFormat } from '@/src/utils/planning';
+import { isSupabaseConfigured } from '@/src/services/supabase';
 
 export function ImportView({ onDone }: { onDone: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -14,7 +15,7 @@ export function ImportView({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
 
   async function handleFile(file?: File) {
-    if (!file) return;
+    if (!file || isSupabaseConfigured) return;
     setBusy(true); setError('');
     try {
       const requests = await parseAgendaFile(file);
@@ -32,6 +33,8 @@ export function ImportView({ onDone }: { onDone: () => void }) {
       setError(caught instanceof Error ? caught.message : 'No fue posible leer el archivo.');
     } finally { setBusy(false); }
   }
+
+  if (isSupabaseConfigured) return <section className="mx-auto max-w-5xl p-6"><h2 className="text-2xl font-extrabold">Fuente de solicitudes</h2><p className="mt-3 text-sm">Las solicitudes se reciben desde el extracto privado de Google Sheets mediante Supabase. La importación manual está deshabilitada para no mezclar fuentes.</p><p className="mt-3 text-sm">Se conservan los valores originales y los registros incompletos. Revisa la bandeja Problemas. Actualizar la fuente no cambia tus fechas definitivas ni prioridades.</p><p className="mt-3 text-sm">Consultar última copia solo lee Supabase: no ejecuta consultas en BigQuery.</p></section>;
 
   return <section className="mx-auto max-w-5xl p-6">
     <div className="mb-6"><p className="eyebrow">Carga de datos</p><h2 className="text-2xl font-extrabold">Importar agenda</h2><p className="mt-1 text-sm text-[#65756c]">La fuente se transforma a un modelo interno antes de entrar a planificación. El archivo original no se modifica.</p></div>

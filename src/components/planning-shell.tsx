@@ -10,6 +10,8 @@ import { AgendaBoard } from '@/src/features/agenda/agenda-board';
 import { CapacityView } from '@/src/features/capacity/capacity-view';
 import { ImportView } from '@/src/features/imports/import-view';
 import { useSharedCapacities } from '@/src/hooks/use-shared-capacities';
+import { useSourceRequests } from '@/src/hooks/use-source-requests';
+import { Button } from '@/components/ui/button';
 
 type View = 'agenda' | 'capacity' | 'import';
 
@@ -33,11 +35,12 @@ export function PlanningShell() {
   const resetPlanning = usePlanningStore((state) => state.resetPlanning);
   const history = usePlanningStore((state) => state.history);
   const shared = useSharedCapacities();
+  const source = useSourceRequests(shared.session?.user.id, shared.authorized === true);
 
   useEffect(() => {
-    if (!hydrated || requests.length) return;
+    if (!hydrated || requests.length || shared.configured) return;
     void loadBundledSample().then(importRequests).catch(() => undefined);
-  }, [hydrated, requests.length, importRequests]);
+  }, [hydrated, requests.length, importRequests, shared.configured]);
 
   useEffect(() => {
     const modelContext = (document as Document & { modelContext?: ModelContextTool }).modelContext;
@@ -120,6 +123,10 @@ export function PlanningShell() {
         <div className="flex items-center gap-2"><div className="hidden items-center gap-1.5 text-[11px] font-semibold text-[#6c7d74] xl:flex">{shared.configured ? <><Cloud size={14} className="text-[#3d7b59]" /> Supabase · {shared.session?.user.email}</> : <><Database size={14} className="text-[#3d7b59]" /> Modo local · {history.length} cambios</>}</div>{shared.configured && <button onClick={() => void shared.signOut()} className="icon-button" title="Cerrar sesión"><LogOut size={16} /></button>}<button onClick={confirmReset} className="icon-button" title="Reiniciar planificación"><RotateCcw size={16} /></button></div>
       </div>
     </header>
+    {shared.configured && <section className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-3 px-5 py-3 text-xs" aria-live="polite">
+      <div><p className="font-bold">{source.message}</p><p className="mt-1 text-[#65756c]">{source.refreshedAt && `${source.count} solicitudes · Fuente actualizada: ${new Date(source.refreshedAt).toLocaleString('es-CL')} · `}Solicitudes y capacidades compartidas. Fechas definitivas, prioridades e historial guardados en este navegador.</p></div>
+      <Button variant="outline" size="sm" disabled={source.busy} onClick={source.refresh}>{source.busy ? 'Consultando…' : 'Consultar última copia'}</Button>
+    </section>}
     <div className="border-b border-[#dce5df] bg-white px-4 py-2 md:hidden"><div className="mx-auto flex max-w-[1800px] gap-1"><NavButton active={view === 'agenda'} onClick={() => setView('agenda')} icon={<Warehouse size={15} />} label="Agenda" /><NavButton active={view === 'capacity'} onClick={() => setView('capacity')} icon={<Gauge size={15} />} label="Capacidad" /><NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload size={15} />} label="Importar" /></div></div>
     {!hydrated ? <div className="grid min-h-[60vh] place-items-center text-sm font-semibold text-[#6d7c74]">Recuperando planificación local…</div> : view === 'agenda' ? <AgendaBoard warehouse={warehouse} onWarehouseChange={setWarehouse} /> : view === 'capacity' ? <CapacityView warehouse={warehouse} saveCapacities={shared.saveCapacities} syncMessage={shared.configured ? shared.message : 'Modo local: configura Supabase para compartir los cambios'} syncStatus={shared.status} /> : <ImportView onDone={() => setView('agenda')} />}
   </main>;

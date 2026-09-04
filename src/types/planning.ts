@@ -8,6 +8,9 @@ export interface AgendaRequest {
   sellerName: string;
   warehouse: WarehouseId | '';
   units: number;
+  unitsMissing?: boolean;
+  sourceRow?: Record<string, unknown>;
+  sourceAbsent?: boolean;
   fechaCreacion: string;
   fechaEnvioOriginal: string;
   fechaInicio: string;

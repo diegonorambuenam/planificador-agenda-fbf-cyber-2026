@@ -22,8 +22,8 @@ export function AgendaBoard({ warehouse, onWarehouseChange }: { warehouse: Wareh
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const days = weekDays(anchor);
   const warehouseRequests = useMemo(() => selectedRequests(requests, warehouse), [requests, warehouse]);
-  const pending = warehouseRequests.filter((request) => !request.fechaDefinitiva && request.planningStatus !== 'Con problema' && request.planningStatus !== 'Rechazado');
-  const problems = requests.filter((request) => request.planningStatus === 'Con problema');
+  const pending = warehouseRequests.filter((request) => !request.fechaDefinitiva && !request.sourceAbsent && request.validationStatus !== 'error' && request.planningStatus !== 'Con problema' && request.planningStatus !== 'Rechazado');
+  const problems = requests.filter((request) => request.validationStatus === 'error' || request.sourceAbsent);
   const query = search.trim().toLowerCase();
   const visible = (tray === 'pending' ? pending : problems).filter((request) => !query || [request.number, request.sellerId, request.sellerName].some((value) => value.toLowerCase().includes(query)));
   const groups = grouped ? Object.entries(Object.groupBy(visible, (request) => request.sellerName || 'Sin seller')) : [];
@@ -44,7 +44,7 @@ export function AgendaBoard({ warehouse, onWarehouseChange }: { warehouse: Wareh
     setActiveNumber(null);
     if (!request || !target) return;
     if (target === 'pending-drop') { assignNumber(number, null); return; }
-    if (!target.startsWith('day:')) return;
+    if (!target.startsWith('day:') || request.validationStatus === 'error' || request.sourceAbsent || request.warehouse !== warehouse) return;
     const date = target.replace('day:', '');
     if (request.fechaDefinitiva === date) return;
     const metrics = dayMetrics(requests, capacities, warehouse, date);
@@ -69,7 +69,7 @@ export function AgendaBoard({ warehouse, onWarehouseChange }: { warehouse: Wareh
         <Kpi label="Unidades pendientes" value={numberFormat.format(totalUnits - scheduledUnits)} detail={`${pending.length} numbers`} />
         <Kpi label="Capacidad visible" value={weekCapacityDefined ? numberFormat.format(weekCapacity) : 'Incompleta'} detail={`Semana ${getISOWeek(anchor)}`} />
         <Kpi label="Disponible" value={weekCapacityDefined ? numberFormat.format(weekCapacity - weekUsed) : '—'} detail={weekCapacityDefined && weekCapacity ? `${percentageFormat.format((weekUsed / weekCapacity) * 100)}% utilizado` : 'Configura capacidad'} />
-        <Kpi label="Con problemas" value={String(problems.length)} detail="Fuera de planificación" alert={problems.length > 0} />
+        <Kpi label="Con problemas" value={String(problems.length)} detail="Revisar datos de origen" alert={problems.length > 0} />
       </div>
 
       <section className="grid min-h-[650px] grid-cols-1 gap-3 xl:grid-cols-[310px_minmax(0,1fr)]">
@@ -100,10 +100,10 @@ function DayColumn({ day, warehouse, requests, capacities }: { day: { date: stri
 }
 
 function NumberCard({ request, compact = false, overlay = false }: { request: AgendaRequest; compact?: boolean; overlay?: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `number:${request.number}`, disabled: request.planningStatus === 'Con problema' });
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `number:${request.number}`, disabled: request.validationStatus === 'error' || request.sourceAbsent });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
   const within = request.fechaDefinitiva ? isWithinWindow(request, request.fechaDefinitiva) : true;
-  return <article ref={setNodeRef} style={style} {...listeners} {...attributes} className={`number-card ${compact ? 'compact' : ''} ${overlay ? 'overlay' : ''} ${isDragging ? 'opacity-30' : ''} ${request.planningStatus === 'Con problema' ? 'problem' : ''}`}><div className="flex items-start gap-2"><GripVertical className="mt-0.5 shrink-0 text-[#9bad9f]" size={15} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate text-[11px] font-extrabold tracking-wide">{request.number || 'SIN NUMBER'}</p>{request.priority !== 'Normal' && <span className={`priority ${request.priority.toLowerCase()}`}>{request.priority}</span>}</div><p className="mt-1 truncate text-[11px] text-[#66776e]">{request.sellerName || 'Seller sin nombre'}</p><div className="mt-2 flex items-end justify-between gap-2"><p className="text-sm font-extrabold">{numberFormat.format(request.units)} <span className="text-[9px] font-medium text-[#7c8b83]">uds</span></p>{request.validationStatus === 'error' ? <AlertTriangle size={14} className="text-[#b45331]" /> : <p className={`text-[9px] font-bold ${within ? 'text-[#4f735f]' : 'text-[#b45331]'}`}>{request.fechaInicio?.slice(5)} → {request.fechaFin?.slice(5)}</p>}</div>{request.validationMessages.length > 0 && request.planningStatus === 'Con problema' && <p className="mt-2 text-[9px] font-semibold text-[#a84f2e]">{request.validationMessages[0]}</p>}</div></div></article>;
+  return <article ref={setNodeRef} style={style} {...listeners} {...attributes} className={`number-card ${compact ? 'compact' : ''} ${overlay ? 'overlay' : ''} ${isDragging ? 'opacity-30' : ''} ${request.planningStatus === 'Con problema' ? 'problem' : ''}`}><div className="flex items-start gap-2"><GripVertical className="mt-0.5 shrink-0 text-[#9bad9f]" size={15} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate text-[11px] font-extrabold tracking-wide">{request.number || 'SIN NUMBER'}</p>{request.priority !== 'Normal' && <span className={`priority ${request.priority.toLowerCase()}`}>{request.priority}</span>}</div><p className="mt-1 truncate text-[11px] text-[#66776e]">{request.sellerName || 'Seller sin nombre'}</p><div className="mt-2 flex items-end justify-between gap-2"><p className="text-sm font-extrabold">{request.unitsMissing ? '—' : numberFormat.format(request.units)} <span className="text-[9px] font-medium text-[#7c8b83]">uds</span></p>{request.validationStatus === 'error' ? <AlertTriangle size={14} className="text-[#b45331]" /> : <p className={`text-[9px] font-bold ${within ? 'text-[#4f735f]' : 'text-[#b45331]'}`}>{request.fechaInicio?.slice(5)} → {request.fechaFin?.slice(5)}</p>}</div>{request.validationMessages.length > 0 && <p className="mt-2 text-[9px] font-semibold text-[#a84f2e]">{request.validationMessages[0]}</p>}</div></div></article>;
 }
 
 function Kpi({ label, value, detail, alert = false }: { label: string; value: string; detail: string; alert?: boolean }) {
