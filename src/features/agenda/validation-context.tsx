@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { getSupabaseClient, CAPACITY_EVENT_ID } from '@/src/services/supabase';
 import { parseValidations, validationKey, type ValidationKind, type ValidationMap } from '@/src/services/preagenda-validation';
 import { Button } from '@/components/ui/button';
+import { Check } from 'lucide-react';
 import type { AgendaRequest } from '@/src/types/planning';
 
 interface ValidationState {
@@ -71,10 +72,11 @@ export function ValidationChecks({request, disabled = false, only}: {request:Age
       const label=kind==='fbf'?'FBF':'Comercial';
       const title=!state.ready?'Esperando validaciones compartidas':row?`${label}: ${row.approved?'validada':'pendiente'} · ${row.updated_by??'Equipo'} · ${new Date(row.updated_at).toLocaleString('es-CL')}`:`${label}: pendiente de validación`;
       return <Button key={kind} size="xs" variant="outline" aria-pressed={approved} title={title}
-        className={approved?'border-green-300 bg-green-50 text-green-800':'text-[#607168]'}
+        aria-label={`${label}: ${!state.ready?'esperando validaciones':approved?'validado':'pendiente'}`}
+        className={approved?'border-green-300 bg-green-50 text-green-800 hover:bg-green-100 hover:text-green-800':'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-700'}
         disabled={disabled || !state.ready || Object.keys(state.busy).length>0 || !request.number || !request.origin}
         onClick={()=>{if(approved&&!window.confirm(`¿Devolver la validación ${label} de ${request.number} a pendiente?`))return;void state.save(request.number,kind,!approved);}}>
-        {approved?'✓':'○'} {label}{!state.ready?' · …':approved?' validado':' pendiente'}
+        <Check aria-hidden="true" className={approved?'text-green-600':'text-gray-400'} /> {label}
       </Button>;
     })}
   </div>;

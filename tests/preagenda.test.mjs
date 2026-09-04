@@ -42,3 +42,14 @@ test('unified tray and compact export have no separate problem tab',()=>{
   assert.ok(board.includes('Fecha sistema:'));
   assert.ok(!exporter.includes('Compartir detalle de agendas'));
 });
+test('compact validation checks keep accessible state and independent click actions',()=>{
+  const component=readFileSync(new URL('../src/features/agenda/validation-context.tsx',import.meta.url),'utf8');
+  assert.ok(component.includes('<Check aria-hidden="true"'));
+  assert.ok(component.includes("approved?'text-green-600':'text-gray-400'"));
+  assert.ok(component.includes(' /> {label}'));
+  assert.ok(!component.includes("approved?' validado':' pendiente'"));
+  assert.ok(component.includes('aria-pressed={approved}'));
+  assert.ok(component.includes('aria-label='));
+  assert.ok(component.includes('state.save(request.number,kind,!approved)'));
+  assert.ok(component.includes('window.confirm('));
+});
