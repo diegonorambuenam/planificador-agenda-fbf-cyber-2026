@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { WarehouseId } from '@/src/types/planning';
 import { capacityKey, usePlanningStore } from '@/src/store/planning-store';
 import { CAPACITY_EVENT_ID, getSupabaseClient, isSupabaseConfigured } from '@/src/services/supabase';
+import { sessionIdentity } from '@/src/services/session-identity';
 
 export interface CapacityChange {
   warehouse: WarehouseId;
@@ -16,6 +17,8 @@ type SyncStatus = 'local' | 'loading' | 'synced' | 'saving' | 'error';
 
 export function useSharedCapacities() {
   const [session, setSession] = useState<Session | null>(null);
+  const currentIdentity = useRef<string | null>(null);
+  const verifiedIdentity = useRef<string | null>(null);
   const [initialized, setInitialized] = useState(!isSupabaseConfigured);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [account, setAccount] = useState<{ username?: string; pending: boolean; authorized: boolean } | null>(null);
@@ -28,51 +31,70 @@ export function useSharedCapacities() {
   useEffect(() => {
     const supabase = getSupabaseClient();
     if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setInitialized(true);
-    });
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setAuthorized(null);
-      setAccount(null);
-      setInitialized(true);
-      if (!nextSession) {
-        setAccount(null);
+    let active = true;
+    let receivedAuthEvent = false;
+    const acceptSession = (nextSession: Session | null) => {
+      if (!active) return;
+      const identity = sessionIdentity(nextSession);
+      if (identity !== currentIdentity.current || !nextSession) {
+        currentIdentity.current = identity;
+        verifiedIdentity.current = null;
         setAuthorized(null);
+        setAccount(null);
         setStatus('loading');
       }
+      setSession(nextSession);
+      setInitialized(true);
+    };
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      receivedAuthEvent = true;
+      acceptSession(nextSession);
     });
-    return () => data.subscription.unsubscribe();
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!receivedAuthEvent) acceptSession(data.session);
+    });
+    return () => { active = false; data.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
     if (!supabase || !session || !hydrated) return;
     const client = supabase;
+    const identity = sessionIdentity(session);
+    const background = verifiedIdentity.current === identity;
     let active = true;
+    const isCurrent = () => active && currentIdentity.current === identity;
     let channel: ReturnType<typeof client.channel> | null = null;
 
     async function connect() {
-      setStatus('loading');
-      setAuthorized(null);
-      setMessage('Conectando con las capacidades compartidas…');
-      const { data: member, error: memberError } = await client.rpc('fbf_access_status');
-      if (!active) return;
+      if (!background) {
+        setStatus('loading');
+        setAuthorized(null);
+        setMessage('Conectando con las capacidades compartidas…');
+      }
+      const { data: member, error: memberError, status: responseStatus } = await client.rpc('fbf_access_status');
+      if (!isCurrent()) return;
+      if (memberError && background && responseStatus !== 401 && responseStatus !== 403) {
+        setStatus('error');
+        setMessage('No se pudo comprobar la conexión. Tu pantalla se conserva; vuelve a intentar cuando haya conexión.');
+        return;
+      }
       setAccount(memberError ? null : member);
       if (memberError || !member?.authorized) {
+        verifiedIdentity.current = null;
         setAuthorized(false);
         setStatus('error');
         setMessage(memberError ? 'No fue posible validar el acceso. Intenta iniciar sesión nuevamente.' : member?.pending ? '' : 'Sesión sin acceso. Ingresa nuevamente o solicita un código vigente al administrador.');
         return;
       }
 
+      verifiedIdentity.current = identity;
       setAuthorized(true);
       const { data: rows, error } = await client
         .from('capacities')
         .select('warehouse,date,capacity')
         .eq('event_id', CAPACITY_EVENT_ID);
-      if (!active) return;
+      if (!isCurrent()) return;
       if (error) {
         setStatus('error');
         setMessage(`No fue posible descargar las capacidades: ${error.message}`);
@@ -91,7 +113,7 @@ export function useSharedCapacities() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'capacities', filter: `event_id=eq.${CAPACITY_EVENT_ID}` },
           (payload) => {
-            if (!active) return;
+            if (!isCurrent()) return;
             const row = payload.new as { warehouse?: WarehouseId; date?: string; capacity?: number };
             if (row.warehouse && row.date && row.capacity != null) {
               mergeCapacities({ [capacityKey(row.warehouse, row.date)]: Number(row.capacity) });
@@ -104,11 +126,14 @@ export function useSharedCapacities() {
     }
 
     void connect().catch(() => {
-      if (!active) return;
-      setAuthorized(false);
-      setAccount(null);
+      if (!isCurrent()) return;
+      if (!background) {
+        verifiedIdentity.current = null;
+        setAuthorized(false);
+        setAccount(null);
+      }
       setStatus('error');
-      setMessage('No fue posible conectar con Supabase. Vuelve a ingresar para reintentar.');
+      setMessage(background ? 'Conexión interrumpida. Tu pantalla se conserva; comprueba tu conexión.' : 'No fue posible conectar con Supabase. Vuelve a ingresar para reintentar.');
     });
     return () => {
       active = false;

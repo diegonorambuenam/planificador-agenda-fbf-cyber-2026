@@ -7,8 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: 'Courier New', monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -49,7 +49,8 @@
 }
 
 body {
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.5;
 }
 
 :root {
@@ -87,13 +88,13 @@ body {
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-button, input, select { font: inherit; }
+button, input, select, textarea { font-family: inherit; }
 button { cursor: pointer; }
 ::selection { background: #cfe4d6; color: #163027; }
 
 @layer components {
   .eyebrow {
-    @apply text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#718078];
+    @apply text-[12px] font-extrabold uppercase tracking-[0.14em] text-[#718078];
   }
   .icon-button {
     @apply grid size-9 place-items-center rounded-xl border border-[#d5e0d8] bg-white text-[#355b47] transition hover:border-[#9ab3a2] hover:bg-[#f4f8f5];
@@ -123,7 +124,7 @@ button { cursor: pointer; }
     @apply cursor-default border-[#e4bca8] bg-[#fff9f5];
   }
   .priority {
-    @apply rounded px-1.5 py-0.5 text-[8px] font-extrabold uppercase;
+    @apply rounded px-1.5 py-0.5 text-[12px] font-extrabold uppercase;
   }
   .priority.alta {
     @apply bg-[#fff0e5] text-[#a6542d];
@@ -132,7 +133,7 @@ button { cursor: pointer; }
     @apply bg-[#fff7d9] text-[#936d12];
   }
   .status-pill {
-    @apply rounded-full px-2 py-1 text-[9px] font-extrabold;
+    @apply rounded-full px-2 py-1 text-[12px] font-extrabold;
   }
   .status-pill.neutral {
     @apply bg-[#eef1ef] text-[#6f7d76];
@@ -162,7 +163,7 @@ button { cursor: pointer; }
     @apply bg-[#c95736];
   }
   .field-label {
-    @apply block text-[10px] font-extrabold uppercase tracking-wide text-[#6d7d74];
+    @apply block text-[12px] font-extrabold uppercase tracking-wide text-[#6d7d74];
   }
   .field {
     @apply mt-1 block w-full rounded-xl border border-[#cedbd2] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[#17372b] outline-none focus:border-[#4d8161] focus:ring-2 focus:ring-[#d9eadf];

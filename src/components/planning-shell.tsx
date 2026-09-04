@@ -109,14 +109,14 @@ export function PlanningShell() {
   return <main className="min-h-screen bg-[#f4f7f4] text-[#17372b]">
     <header className="sticky top-0 z-40 border-b border-[#dce5df] bg-white/95 px-5 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#2d6b4c] text-white"><CalendarDays size={20} /></div><div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#6d7f76]">Fulfillment by Falabella</p><h1 className="truncate text-base font-extrabold tracking-tight lg:text-lg">Planificador Definitivo de Agenda FBF</h1></div></div>
+        <div className="flex min-w-0 items-center gap-3"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#2d6b4c] text-white"><CalendarDays size={20} /></div><div className="min-w-0"><p className="text-[12px] font-extrabold uppercase tracking-[.16em] text-[#6d7f76]">Fulfillment by Falabella</p><h1 className="truncate text-base font-extrabold tracking-tight lg:text-lg">Planificador Definitivo de Agenda FBF</h1></div></div>
         <nav className="hidden items-center gap-1 rounded-xl bg-[#eef3ef] p-1 md:flex">
           <NavButton active={view === 'agenda'} onClick={() => setView('agenda')} icon={<Warehouse size={15} />} label="Agenda semanal" />
           <NavButton active={view === 'capacity'} onClick={() => setView('capacity')} icon={<Gauge size={15} />} label="Capacidad" />
           <NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload size={15} />} label="Importar" />
           <NavButton active={view === 'provisionals'} onClick={() => setView('provisionals')} icon={<CalendarDays size={15} />} label="Provisorias" />
         </nav>
-        <div className="flex items-center gap-2"><div className="hidden items-center gap-1.5 text-[11px] font-semibold text-[#6c7d74] xl:flex">{shared.configured ? <><Cloud size={14} className="text-[#3d7b59]" /> Supabase · {shared.session?.user.email}</> : <><Database size={14} className="text-[#3d7b59]" /> Modo local · {history.length} cambios</>}</div>{shared.configured && <button onClick={() => void shared.signOut()} className="icon-button" title="Cerrar sesión"><LogOut size={16} /></button>}<button onClick={confirmReset} className="icon-button" title="Reiniciar planificación"><RotateCcw size={16} /></button></div>
+        <div className="flex items-center gap-2"><div className="hidden items-center gap-1.5 text-[12px] font-semibold text-[#6c7d74] xl:flex">{shared.configured ? <><Cloud size={14} className="text-[#3d7b59]" /> Supabase · {shared.session?.user.email}</> : <><Database size={14} className="text-[#3d7b59]" /> Modo local · {history.length} cambios</>}</div>{shared.configured && <button onClick={() => void shared.signOut()} className="icon-button" title="Cerrar sesión"><LogOut size={16} /></button>}<button onClick={confirmReset} className="icon-button" title="Reiniciar planificación"><RotateCcw size={16} /></button></div>
       </div>
     </header>
     {shared.configured && <section className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-3 px-5 py-3 text-xs" aria-live="polite">
