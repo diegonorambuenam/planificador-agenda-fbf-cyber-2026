@@ -54,7 +54,12 @@ export const usePlanningStore = create<PlanningState>()(
         planningEnd: '2026-10-02',
       },
       setHydrated: (hydrated) => set({ hydrated }),
-      importRequests: (requests) => set((state) => ({ requests: mergeSourceRequests(state.requests, requests) })),
+      importRequests: (incoming) => set((state) => {
+        const requests = mergeSourceRequests(state.requests, incoming);
+        const retained = new Set(requests.map(row => row.number));
+        const removed = new Set(state.requests.filter(row => !retained.has(row.number)).map(row => row.number));
+        return { requests, history: state.history.filter(entry => !removed.has(entry.number)) };
+      }),
       assignNumber: (number, date) =>
         set((state) => {
           const current = state.requests.find((request) => request.number === number);

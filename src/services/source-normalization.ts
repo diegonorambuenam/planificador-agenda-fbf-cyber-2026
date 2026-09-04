@@ -58,6 +58,27 @@ export function normalizeRows(rows: RawRow[]): AgendaRequest[] {
   });
 }
 
+// Exact identities from the original bundled fixture, never a broad DEMO prefix.
+const bundledDemoIdentities: Record<string, [string, string]> = {
+  'DEMO-9006-001': ['DEMO001', 'Seller Demo Norte'],
+  'DEMO-9006-002': ['DEMO002', 'Seller Demo Centro'],
+  'DEMO-9006-003': ['DEMO003', 'Seller Demo Sur'],
+  'DEMO-7002-001': ['DEMO004', 'Seller Demo Hogar'],
+  'DEMO-7002-002': ['DEMO005', 'Seller Demo Tecno'],
+  'DEMO-7002-003': ['DEMO006', 'Seller Demo Deportes'],
+  'DEMO-9006-004': ['DEMO001', 'Seller Demo Norte'],
+  'DEMO-9006-005': ['DEMO007', 'Seller Demo Moda'],
+  'DEMO-7002-004': ['DEMO008', 'Seller Demo Muebles'],
+  'DEMO-PROBLEM-001': ['DEMO009', 'Seller Demo Accesorios'],
+  'DEMO-PROBLEM-002': ['DEMO010', 'Seller Demo Outdoor'],
+  'DEMO-PROBLEM-003': ['DEMO011', 'Seller Demo Kids'],
+};
+
+function isBundledDemo(row: AgendaRequest): boolean {
+  const identity = bundledDemoIdentities[row.number];
+  return !!identity && row.sellerId === identity[0] && row.sellerName === identity[1];
+}
+
 export function mergeSourceRequests(current: AgendaRequest[], incoming: AgendaRequest[]): AgendaRequest[] {
   const previous = new Map(current.map(row=>[row.number,row]));
   const seen = new Set<string>();
@@ -68,8 +89,9 @@ export function mergeSourceRequests(current: AgendaRequest[], incoming: AgendaRe
     return {...row,fechaDefinitiva:old.fechaDefinitiva,priority:old.priority,planningComment:old.planningComment,
       planningStatus:old.fechaDefinitiva || old.planningStatus==='Rechazado' ? old.planningStatus : row.planningStatus};
   });
-  // No destructive replacement: retain prior/local rows absent from this snapshot.
-  for(const old of current) if(!seen.has(old.number)) merged.push({...old,sourceAbsent:true,
+  // User-approved cleanup: only known local demos absent from the source are removed.
+  // All incoming rows and other absent/local records remain untouched.
+  for(const old of current) if(!seen.has(old.number) && !isBundledDemo(old)) merged.push({...old,sourceAbsent:true,
     validationStatus:old.validationStatus==='error'?'error':'warning',
     validationMessages:[...new Set([...old.validationMessages,'No está en la última extracción; registro conservado'])]});
   return merged;

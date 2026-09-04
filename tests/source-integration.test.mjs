@@ -39,6 +39,21 @@ test('merges changed source without losing manual decisions or absent rows', () 
   assert.equal(mergeSourceRequests(merged,normalizeRows([row,{...row,number:'OLD'}]))[1].sourceAbsent,undefined);
 });
 
+test('removes exactly the bundled local demos, preserves all incoming and non-demo rows', () => {
+  const csv=readFileSync(new URL('../public/sample-agenda.csv',import.meta.url),'utf8').trim().split(/\r?\n/);
+  const headers=csv.shift().split(',');
+  const demos=normalizeRows(csv.map(line=>Object.fromEntries(line.split(',').map((value,index)=>[headers[index],value]))));
+  assert.equal(demos.length,12);
+  demos[0].fechaDefinitiva='2026-09-09';
+  const [real]=normalizeRows([row]);
+  const lookalike={...real,number:demos[0].number};
+  assert.deepEqual(mergeSourceRequests([...demos,real],[real]),[real]);
+  assert.equal(mergeSourceRequests([lookalike],[]).length,1);
+  assert.equal(mergeSourceRequests(demos,demos).length,12);
+  const once=mergeSourceRequests([...demos,real],[real]);
+  assert.deepEqual(mergeSourceRequests(once,[real]),once);
+});
+
 const script=readFileSync(new URL('../integrations/google-sheets/Code.gs',import.meta.url),'utf8');
 function harness(options={}) {
   const calls=[]; const now=new Date();

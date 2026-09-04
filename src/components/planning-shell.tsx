@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { CalendarDays, Cloud, Database, Gauge, LogOut, RotateCcw, Upload, Warehouse } from 'lucide-react';
 import { TeamAccessForm } from '@/src/components/team-access-form';
 import type { WarehouseId } from '@/src/types/planning';
-import { loadBundledSample } from '@/src/services/import-service';
 import { usePlanningStore } from '@/src/store/planning-store';
 import { AgendaBoard } from '@/src/features/agenda/agenda-board';
 import { CapacityView } from '@/src/features/capacity/capacity-view';
@@ -30,17 +29,10 @@ export function PlanningShell() {
   const [view, setView] = useState<View>('agenda');
   const [warehouse, setWarehouse] = useState<WarehouseId>('9006');
   const hydrated = usePlanningStore((state) => state.hydrated);
-  const requests = usePlanningStore((state) => state.requests);
-  const importRequests = usePlanningStore((state) => state.importRequests);
   const resetPlanning = usePlanningStore((state) => state.resetPlanning);
   const history = usePlanningStore((state) => state.history);
   const shared = useSharedCapacities();
   const source = useSourceRequests(shared.session?.user.id, shared.authorized === true);
-
-  useEffect(() => {
-    if (!hydrated || requests.length || shared.configured) return;
-    void loadBundledSample().then(importRequests).catch(() => undefined);
-  }, [hydrated, requests.length, importRequests, shared.configured]);
 
   useEffect(() => {
     const modelContext = (document as Document & { modelContext?: ModelContextTool }).modelContext;
