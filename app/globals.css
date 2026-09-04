@@ -121,7 +121,7 @@ button { cursor: pointer; }
     @apply w-[270px] rotate-1 border-[#4e8662] shadow-2xl;
   }
   .number-card.problem {
-    @apply cursor-default border-[#e4bca8] bg-[#fff9f5];
+    @apply border-[#e4bca8] bg-[#fff9f5];
   }
   .priority {
     @apply rounded px-1.5 py-0.5 text-[12px] font-extrabold uppercase;

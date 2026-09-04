@@ -6,6 +6,7 @@ import { addWeeks, format, getISOWeek, parseISO, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { AlertTriangle, CalendarRange, Check, ChevronLeft, ChevronRight, GripVertical, Layers3, Search, UsersRound } from 'lucide-react';
 import type { AgendaRequest, WarehouseId } from '@/src/types/planning';
+import { canMoveRequest, movementAlerts } from '@/src/services/agenda-movement';
 import { WAREHOUSES } from '@/src/types/planning';
 import { capacityKey, usePlanningStore } from '@/src/store/planning-store';
 import { dayMetrics, isWithinWindow, numberFormat, percentageFormat, selectedRequests, weekDays } from '@/src/utils/planning';
@@ -38,17 +39,21 @@ export function AgendaBoard({ warehouse, onWarehouseChange }: { warehouse: Wareh
   const scheduledUnits = warehouseRequests.filter((request) => request.fechaDefinitiva).reduce((sum, request) => sum + request.units, 0);
 
   function handleDragEnd(event: DragEndEvent) {
-    const number = String(event.active.id).replace('number:', '');
+    const number = String(event.active.id).replace(/^(number|scheduled):/, '');
     const request = requests.find((item) => item.number === number);
     const target = event.over?.id ? String(event.over.id) : '';
     setActiveNumber(null);
-    if (!request || !target || request.origin === 'provisional') return;
+    if (!request || !target || !canMoveRequest(request)) return;
     if (target === 'pending-drop') { assignNumber(number, null); return; }
-    if (!target.startsWith('day:') || request.validationStatus === 'error' || request.sourceAbsent || request.warehouse !== warehouse) return;
+    if (!target.startsWith('day:')) return;
+    if (request.warehouse !== warehouse) {
+      window.alert(request.warehouse ? `Selecciona la bodega ${request.warehouse} para mover esta solicitud.` : 'Esta solicitud no tiene una bodega válida. Corrígela en el origen antes de asignarle un día.');
+      return;
+    }
     const date = target.replace('day:', '');
     if (request.fechaDefinitiva === date) return;
     const metrics = dayMetrics(requests, capacities, warehouse, date);
-    const warnings: string[] = [];
+    const warnings = movementAlerts(request);
     if (metrics.capacity == null) warnings.push('La capacidad de este día no está definida.');
     else if (metrics.used + request.units > metrics.capacity) warnings.push(`La asignación dejará ${numberFormat.format(metrics.used + request.units - metrics.capacity)} unidades sobre capacidad.`);
     if (!isWithinWindow(request, date)) warnings.push(`La fecha está fuera de la ventana ${request.fechaInicio} → ${request.fechaFin}.`);
@@ -56,7 +61,7 @@ export function AgendaBoard({ warehouse, onWarehouseChange }: { warehouse: Wareh
     assignNumber(number, date);
   }
 
-  return <DndContext sensors={sensors} onDragStart={(event: DragStartEvent) => setActiveNumber(String(event.active.id).replace('number:', ''))} onDragCancel={() => setActiveNumber(null)} onDragEnd={handleDragEnd}>
+  return <DndContext sensors={sensors} onDragStart={(event: DragStartEvent) => setActiveNumber(String(event.active.id).replace(/^(number|scheduled):/, ''))} onDragCancel={() => setActiveNumber(null)} onDragEnd={handleDragEnd}>
     <section className="mx-auto max-w-[1800px] px-5 py-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1 rounded-xl bg-[#17372b] p-1 text-white">{(Object.keys(WAREHOUSES) as WarehouseId[]).map((id) => <button key={id} onClick={() => onWarehouseChange(id)} className={`rounded-lg px-4 py-2 text-sm font-bold transition ${warehouse === id ? 'bg-[#3d7b59] shadow-sm' : 'text-white/65 hover:text-white'}`}>{id} · {WAREHOUSES[id]}</button>)}</div>
@@ -100,10 +105,10 @@ function DayColumn({ day, warehouse, requests, capacities }: { day: { date: stri
 }
 
 function NumberCard({ request, compact = false, overlay = false }: { request: AgendaRequest; compact?: boolean; overlay?: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `number:${request.number}`, disabled: request.validationStatus === 'error' || request.sourceAbsent || request.origin === 'provisional' });
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `${overlay ? 'overlay' : compact ? 'scheduled' : 'number'}:${request.number}`, disabled: overlay || !canMoveRequest(request) });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
   const within = request.fechaDefinitiva ? isWithinWindow(request, request.fechaDefinitiva) : true;
-  return <article ref={setNodeRef} style={style} {...listeners} {...attributes} className={`number-card ${compact ? 'compact' : ''} ${overlay ? 'overlay' : ''} ${isDragging ? 'opacity-30' : ''} ${request.planningStatus === 'Con problema' ? 'problem' : ''}`}><div className="flex items-start gap-2"><GripVertical className="mt-0.5 shrink-0 text-[#9bad9f]" size={15} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="break-words text-sm font-bold">{request.number || 'SIN NUMBER'}</p>{request.priority !== 'Normal' && <span className={`priority ${request.priority.toLowerCase()}`}>{request.priority}</span>}</div>{request.origin === 'provisional' && <p className="mt-1 text-[12px] font-bold text-amber-700">PROVISORIA · editar en Provisorias</p>}{request.origin === 'sheet' && <p className="mt-1 text-[12px] font-bold text-[#4f735f]">FORMULARIO{request.promotedFromProvisional ? ' · reserva conservada' : ''}</p>}<p className="mt-1 break-words text-sm text-[#66776e]">{request.sellerName || 'Seller sin nombre'}</p><div className="mt-2 flex items-end justify-between gap-2"><p className="text-sm font-extrabold">{request.unitsMissing ? '—' : numberFormat.format(request.units)} <span className="text-[12px] font-medium text-[#7c8b83]">uds</span></p>{request.validationStatus === 'error' ? <AlertTriangle size={14} className="text-[#b45331]" /> : <p className={`text-[12px] font-bold ${within ? 'text-[#4f735f]' : 'text-[#b45331]'}`}>{request.fechaInicio?.slice(5)} → {request.fechaFin?.slice(5)}</p>}</div>{request.validationMessages.length > 0 && <p className="mt-2 text-[12px] font-semibold text-[#a84f2e]">{request.validationMessages[0]}</p>}</div></div></article>;
+  return <article ref={setNodeRef} style={style} {...listeners} {...attributes} className={`number-card ${compact ? 'compact' : ''} ${overlay ? 'overlay' : ''} ${isDragging ? 'opacity-30' : ''} ${request.validationStatus === 'error' || request.sourceAbsent || request.planningStatus === 'Con problema' ? 'problem' : ''}`}><div className="flex items-start gap-2"><GripVertical className="mt-0.5 shrink-0 text-[#9bad9f]" size={15} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="break-words text-sm font-bold">{request.number || 'SIN NUMBER'}</p>{request.priority !== 'Normal' && <span className={`priority ${request.priority.toLowerCase()}`}>{request.priority}</span>}</div>{request.origin === 'provisional' && <p className="mt-1 text-[12px] font-bold text-amber-700">PROVISORIA · editar en Provisorias</p>}{request.origin === 'sheet' && <p className="mt-1 text-[12px] font-bold text-[#4f735f]">FORMULARIO{request.promotedFromProvisional ? ' · reserva conservada' : ''}</p>}<p className="mt-1 break-words text-sm text-[#66776e]">{request.sellerName || 'Seller sin nombre'}</p><div className="mt-2 flex items-end justify-between gap-2"><p className="text-sm font-extrabold">{request.unitsMissing ? '—' : numberFormat.format(request.units)} <span className="text-[12px] font-medium text-[#7c8b83]">uds</span></p>{request.validationStatus === 'error' ? <AlertTriangle size={14} className="text-[#b45331]" /> : <p className={`text-[12px] font-bold ${within ? 'text-[#4f735f]' : 'text-[#b45331]'}`}>{request.fechaInicio?.slice(5)} → {request.fechaFin?.slice(5)}</p>}</div>{request.validationMessages.length > 0 && <p className="mt-2 text-[12px] font-semibold text-[#a84f2e]">{request.validationMessages[0]}</p>}</div></div></article>;
 }
 
 function Kpi({ label, value, detail, alert = false }: { label: string; value: string; detail: string; alert?: boolean }) {
