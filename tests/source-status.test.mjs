@@ -24,7 +24,7 @@ test('card filtering does not change capacity calculations or export scope', () 
   const board = readFileSync(new URL('../src/features/agenda/agenda-board.tsx', import.meta.url), 'utf8');
   assert.ok(board.includes('dayMetrics(requests, capacities, warehouse, date)'));
   assert.ok(board.includes('dayMetrics(requests, capacities, warehouse, day.date)'));
-  assert.ok(board.includes('metrics.assigned.filter(request => matchesSourceStatus(request, sourceStatus)).map'));
+  assert.ok(board.includes('metrics.assigned.filter(request => visibleRequests.includes(request)).map'));
   assert.ok(board.includes('<ExportAgendasButton requests={requests} />'));
   assert.ok(board.includes('sourceStatusLabel(request)'));
 });

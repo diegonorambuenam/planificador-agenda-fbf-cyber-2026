@@ -6,9 +6,12 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { AgendaRequest } from '@/src/types/planning';
 import { requestOrigin, sourceValue } from '@/src/services/agenda-export';
+import { useValidations, ValidationChecks } from './validation-context';
+import { validationKey } from '@/src/services/preagenda-validation';
 
 export function RequestDetails({ request }: { request: AgendaRequest }) {
   const fields = Object.entries(request.sourceRow ?? {});
+  const validations = useValidations();
   const summary = [
     ['Origen', requestOrigin(request)], ['Bodega', request.warehouse || 'Sin bodega'],
     ['Seller', request.sellerName || 'Sin nombre'], ['Fecha asignada', request.fechaDefinitiva || 'Sin asignar'],
@@ -25,6 +28,14 @@ export function RequestDetails({ request }: { request: AgendaRequest }) {
           <DialogTitle>Solicitud {request.number || 'sin number'}</DialogTitle>
           <DialogDescription>Planificación actual y datos de la última copia recibida. Información de solo lectura.</DialogDescription>
         </DialogHeader>
+        <section className="space-y-2">
+          <h3 className="font-bold">Validaciones pre-agenda</h3>
+          <ValidationChecks request={request}/>
+          {validations.ready && (['fbf','commercial'] as const).map(kind => {
+            const row=validations.rows[validationKey(request.number,kind)];
+            return row && <p key={kind} className="text-xs text-[#607168]">{kind==='fbf'?'FBF':'Comercial'}: {row.approved?'validada':'devuelta a pendiente'} por {row.updated_by??'Equipo'} · {new Date(row.updated_at).toLocaleString('es-CL')}</p>;
+          })}
+        </section>
         <dl className="grid grid-cols-1 gap-3 rounded-xl bg-[#f0f5f1] p-4 sm:grid-cols-2">
           {summary.map(([label, value]) => <div key={label}><dt className="text-xs font-bold text-[#607168]">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm">{value}</dd></div>)}
         </dl>

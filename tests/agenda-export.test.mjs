@@ -48,6 +48,13 @@ test('empty export is explicit and complex original values remain readable', () 
   assert.equal(sourceValue(false), false);
   assert.equal(sourceValue({ detail: ['a', 'b'] }), '{"detail":["a","b"]}');
 });
+test('export includes both independent shared approvals without implying a system date change', () => {
+  const approvals = { [JSON.stringify([fixture.number,'fbf'])]: { approved:true,updated_by:'Test user',updated_at:'2026-09-04T12:00:00Z' } };
+  const workbook=createAgendaWorkbook([fixture],new Date('2026-09-04T12:00:00Z'),approvals);
+  const rows=XLSX.utils.sheet_to_json(workbook.Sheets.Agendas);
+  assert.ok(rows[0]['Validación FBF'].startsWith('Validada'));
+  assert.equal(rows[0]['Validación comercial'],'Pendiente');
+});
 test('details are available on real cards with pointer isolation and original columns', () => {
   const board = readFileSync(new URL('../src/features/agenda/agenda-board.tsx', import.meta.url), 'utf8');
   const details = readFileSync(new URL('../src/features/agenda/request-details.tsx', import.meta.url), 'utf8');

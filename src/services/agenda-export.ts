@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { AgendaRequest } from '@/src/types/planning';
+import type { ValidationMap } from '@/src/services/preagenda-validation';
 
 export function sourceValue(value: unknown): string | number | boolean {
   if (value == null) return '';
@@ -18,7 +19,7 @@ function excelDate(value: string | null): Date | string {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : value;
 }
 
-export function createAgendaWorkbook(requests: AgendaRequest[], exportedAt = new Date()) {
+export function createAgendaWorkbook(requests: AgendaRequest[], exportedAt = new Date(), validations?: ValidationMap) {
   const scheduled = requests.filter(row => row.fechaDefinitiva).slice().sort((a, b) =>
     a.fechaDefinitiva!.localeCompare(b.fechaDefinitiva!) || a.warehouse.localeCompare(b.warehouse) || a.number.localeCompare(b.number));
   if (!scheduled.length) throw new Error('No hay agendas con fecha asignada para exportar.');
@@ -29,6 +30,13 @@ export function createAgendaWorkbook(requests: AgendaRequest[], exportedAt = new
     row.validationStatus === 'error' ? 'Con problema' : row.validationStatus === 'warning' ? 'Con advertencia' : 'Sin alertas',
     row.validationMessages.join('\n'), row.sourceAbsent ? 'Sí' : 'No']);
   const workbook = XLSX.utils.book_new();
+  header.push('Validación FBF', 'Validación comercial');
+  scheduled.forEach((row,index) => {
+    for (const kind of ['fbf','commercial']) {
+      const approval = validations?.[JSON.stringify([row.number,kind])];
+      rows[index].push(validations === undefined ? 'No consultada' : approval?.approved ? `Validada · ${approval.updated_by??'Equipo'} · ${approval.updated_at}` : 'Pendiente');
+    }
+  });
   const agenda = XLSX.utils.aoa_to_sheet([header, ...rows], { dateNF: 'yyyy-mm-dd' });
   agenda['!autofilter'] = { ref: agenda['!ref']! };
   agenda['!cols'] = header.map((_, index) => ({ wch: [4, 9, 15].includes(index) ? 45 : 24 }));
@@ -57,7 +65,7 @@ export function createAgendaWorkbook(requests: AgendaRequest[], exportedAt = new
   return workbook;
 }
 
-export function downloadAgendas(requests: AgendaRequest[]) {
+export function downloadAgendas(requests: AgendaRequest[], validations?: ValidationMap) {
   const now = new Date();
-  XLSX.writeFile(createAgendaWorkbook(requests, now), `agendas-fbf-${now.toISOString().replace(/[:.]/g, '-')}.xlsx`, { compression: true });
+  XLSX.writeFile(createAgendaWorkbook(requests, now, validations), `agendas-fbf-${now.toISOString().replace(/[:.]/g, '-')}.xlsx`, { compression: true });
 }
