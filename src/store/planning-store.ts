@@ -63,7 +63,7 @@ export const usePlanningStore = create<PlanningState>()(
       assignNumber: (number, date) =>
         set((state) => {
           const current = state.requests.find((request) => request.number === number);
-          if (!current) return state;
+          if (!current || current.origin === 'provisional') return state;
           const action = date ? (current.fechaDefinitiva ? 'Cambio de fecha' : 'Agendado') : 'Devuelto a pendientes';
           const requests = state.requests.map((request) =>
             request.number !== number
@@ -85,11 +85,11 @@ export const usePlanningStore = create<PlanningState>()(
       mergeCapacities: (capacities) => set((state) => ({ capacities: { ...state.capacities, ...capacities } })),
       setPriority: (number, priority) =>
         set((state) => ({
-          requests: state.requests.map((request) => request.number === number ? { ...request, priority } : request),
+          requests: state.requests.map((request) => request.number === number && request.origin !== 'provisional' ? { ...request, priority } : request),
           history: [{ timestamp: new Date().toISOString(), number, action: 'Cambio prioridad', previousValue: state.requests.find((item) => item.number === number)?.priority ?? null, newValue: priority }, ...state.history],
         })),
       resetPlanning: () => set((state) => ({
-        requests: state.requests.map((request) => ({ ...request, fechaDefinitiva: null, planningStatus: (request.validationStatus === 'error' ? 'Con problema' : 'Pendiente') as AgendaRequest['planningStatus'], priority: 'Normal' as Priority, planningComment: '' })),
+        requests: state.requests.map((request) => request.origin === 'provisional' ? request : ({ ...request, fechaDefinitiva: null, planningStatus: (request.validationStatus === 'error' ? 'Con problema' : 'Pendiente') as AgendaRequest['planningStatus'], priority: 'Normal' as Priority, planningComment: '' })),
         history: [],
       })),
     }),

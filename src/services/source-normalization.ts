@@ -86,12 +86,14 @@ export function mergeSourceRequests(current: AgendaRequest[], incoming: AgendaRe
     seen.add(row.number);
     const old=previous.get(row.number);
     if(!old) return row;
+    // Shared provisional state is authoritative, including the promotion date.
+    if(row.origin==='provisional' || (old.origin==='provisional' && row.origin==='sheet')) return row;
     return {...row,fechaDefinitiva:old.fechaDefinitiva,priority:old.priority,planningComment:old.planningComment,
       planningStatus:old.fechaDefinitiva || old.planningStatus==='Rechazado' ? old.planningStatus : row.planningStatus};
   });
   // User-approved cleanup: only known local demos absent from the source are removed.
   // All incoming rows and other absent/local records remain untouched.
-  for(const old of current) if(!seen.has(old.number) && !isBundledDemo(old)) merged.push({...old,sourceAbsent:true,
+  for(const old of current) if(!seen.has(old.number) && !isBundledDemo(old) && old.origin!=='provisional') merged.push({...old,sourceAbsent:true,
     validationStatus:old.validationStatus==='error'?'error':'warning',
     validationMessages:[...new Set([...old.validationMessages,'No está en la última extracción; registro conservado'])]});
   return merged;

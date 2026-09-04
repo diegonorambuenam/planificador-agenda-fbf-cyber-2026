@@ -3,6 +3,9 @@ export type PlanningStatus = 'Pendiente' | 'Agendado' | 'Reprogramado' | 'Rechaz
 export type Priority = 'Normal' | 'Media' | 'Alta';
 
 export interface AgendaRequest {
+  origin?: 'sheet' | 'provisional';
+  provisionalRevision?: string;
+  promotedFromProvisional?: boolean;
   number: string;
   sellerId: string;
   sellerName: string;
