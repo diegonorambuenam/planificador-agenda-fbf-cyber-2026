@@ -5,6 +5,9 @@ export type Priority = 'Normal' | 'Media' | 'Alta';
 export interface AgendaRequest {
   origin?: 'sheet' | 'provisional';
   provisionalRevision?: string;
+  planningRevision?: string;
+  planningUpdatedAt?: string;
+  planningUpdatedBy?: string | null;
   promotedFromProvisional?: boolean;
   number: string;
   sellerId: string;

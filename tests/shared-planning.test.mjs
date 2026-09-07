@@ -1,0 +1,115 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+const read=path=>readFileSync(new URL(path,import.meta.url),'utf8');
+const compile=path=>ts.transpileModule(read(path),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const url=code=>'data:text/javascript;base64,'+Buffer.from(code).toString('base64');
+const sharedUrl=url(compile('../src/services/shared-planning.ts'));
+const normalizationUrl=url(compile('../src/services/source-normalization.ts'));
+const validationUrl=url(compile('../src/services/preagenda-validation.ts'));
+const {parseSharedPlans,applySharedPlan,validPlanDate}=await import(sharedUrl);
+const {normalizeRows,mergeSourceRequests}=await import(normalizationUrl);
+const {filterTableRequests,sortTableRequests,sourceDateTimeKey,emptyTableFilters}=await import(url(compile('../src/services/agenda-table-data.ts').replace("'./source-normalization'",JSON.stringify(normalizationUrl)).replace("'./preagenda-validation'",JSON.stringify(validationUrl))));
+const {parsePlannerSnapshot}=await import(url(compile('../src/services/planner-snapshot.ts').replace("'./source-normalization'",JSON.stringify(normalizationUrl)).replace("'./shared-planning'",JSON.stringify(sharedUrl))));
+const raw={number:'TEST-2',creado:'03/09/2026 12:30:45',seller:'Synthetic',seller_id:'1',node_id:'7002',units:'10',fecha_envio:'2026-10-15',fecha_ini:'2026-09-07',fecha_fin:'2026-09-18',estado:'Agenda Cyber'};
+const request={...normalizeRows([raw])[0],origin:'sheet'};
+const plan={number:request.number,origin:'sheet',planned_date:'2026-09-15',priority:'Alta',revision:'00000000-0000-4000-8000-000000000001',updated_at:'2026-09-04T15:30:00Z',updated_by:'Synthetic user'};
+test('shared planning accepts explicit unscheduling, rejects malformed dates and duplicate revisions',()=>{
+  assert.equal(validPlanDate('2026-02-30'),false);
+  assert.equal(validPlanDate('2026-09-15'),true);
+  assert.equal(validPlanDate(null),true);
+  assert.throws(()=>parseSharedPlans([plan,plan]));
+  assert.throws(()=>parseSharedPlans([{...plan,planned_date:'invalid'}]));
+  assert.throws(()=>parseSharedPlans([{...plan,origin:'provisional',planned_date:null}]));
+  assert.throws(()=>parseSharedPlans([{...plan,updated_at:'bad'}]));
+  assert.equal(parseSharedPlans([{...plan,planned_date:null}])[0].planned_date,null);
+});
+test('confirmed plan wins over legacy local dates, preserving source and creation data',()=>{
+  const old={...request,fechaDefinitiva:'2026-09-08',priority:'Normal'};
+  const shared=applySharedPlan(request,plan);
+  const [merged]=mergeSourceRequests([old],[shared]);
+  assert.equal(merged.fechaDefinitiva,plan.planned_date);
+  assert.equal(merged.priority,'Alta');
+  assert.equal(merged.planningUpdatedBy,'Synthetic user');
+  assert.equal(merged.fechaEnvioOriginal,'2026-10-15');
+  assert.equal(merged.fechaCreacion,raw.creado);
+  assert.deepEqual(merged.sourceRow,raw);
+  const [cleared]=mergeSourceRequests([shared],[applySharedPlan(request,{...plan,planned_date:null})]);
+  assert.equal(cleared.fechaDefinitiva,null);
+  const [legacy]=mergeSourceRequests([old],[request]);
+  assert.equal(legacy.fechaDefinitiva,old.fechaDefinitiva);
+  assert.equal(legacy.planningUpdatedBy,undefined);
+});
+test('one snapshot combines source, authoritative plans and actor timestamps',()=>{
+  const source={source_refreshed_at:plan.updated_at,received_at:plan.updated_at,row_count:1,rows:[{source:raw,present:true}]};
+  const snapshot=parsePlannerSnapshot({source,provisionals:[],plans:[plan]});
+  assert.equal(snapshot.sharedPlanningReady,true);
+  assert.equal(snapshot.requests[0].planningRevision,plan.revision);
+  assert.equal(snapshot.requests[0].fechaCreacion,raw.creado);
+  assert.equal(parsePlannerSnapshot({source,provisionals:[]}).sharedPlanningReady,false);
+  assert.throws(()=>parsePlannerSnapshot({source,provisionals:[],plans:[{...plan,number:'UNKNOWN'}]}));
+});
+test('table sorting is chronological/numeric with missing values last and no input mutation',()=>{
+  const a={...request,number:'2',fechaCreacion:'03/09/2026 13:00:00',units:2,priority:'Alta'};
+  const b={...request,number:'10',fechaCreacion:'04/08/2026 12:00:00',units:10,priority:'Media'};
+  const c={...request,number:'100',fechaCreacion:'',unitsMissing:true,priority:'Normal'};
+  const rows=[c,a,b];
+  assert.deepEqual(sortTableRequests(rows,'fechaCreacion',false,{},true).map(r=>r.number),['10','2','100']);
+  assert.deepEqual(sortTableRequests(rows,'units',true,{},true).map(r=>r.number),['10','2','100']);
+  assert.deepEqual(sortTableRequests(rows,'number',false,{},true).map(r=>r.number),['2','10','100']);
+  assert.deepEqual(sortTableRequests(rows,'priority',true,{},true).map(r=>r.number),['2','10','100']);
+  assert.deepEqual(rows,[c,a,b]);
+  assert.equal(sourceDateTimeKey('03/09/2026 12:30:45'),'2026-09-03T12:30:45');
+  assert.equal(sourceDateTimeKey('31/02/2026'),'');
+});
+test('filters combine priority, inclusive created range and planned range without hiding pending by default',()=>{
+  const a={...request,fechaDefinitiva:'2026-09-15',priority:'Alta'};
+  const b={...request,number:'OTHER',fechaCreacion:'04/09/2026 09:00:00'};
+  const c={...request,number:'PROV',origin:'provisional',fechaCreacion:raw.creado};
+  assert.equal(filterTableRequests([a,b,c],emptyTableFilters).length,3);
+  assert.deepEqual(filterTableRequests([a,b,c],{...emptyTableFilters,createdFrom:'2026-09-03',createdTo:'2026-09-03',priority:'Alta',plannedFrom:'2026-09-15',plannedTo:'2026-09-15'}),[a]);
+  assert.equal(filterTableRequests([a,b,c],{...emptyTableFilters,createdFrom:'2026-09-05',createdTo:'2026-09-03'}).length,0);
+});
+test('UI awaits durable acknowledgement, snapshot rejects stale in-flight reads, draft captures revision',()=>{
+  const store=read('../src/store/planning-store.ts');
+  const hook=read('../src/hooks/use-source-requests.ts');
+  const table=read('../src/features/agenda/agenda-table.tsx');
+  assert.ok(store.includes("client.rpc('fbf_set_plan'"));
+  assert.ok(store.includes('request.planningRevision??null'));
+  assert.ok(!store.includes('p_updated_by'));
+  assert.ok(hook.includes('epoch!==planningSync.epoch'));
+  assert.ok(table.includes('setEditing({...request})'));
+  assert.ok(table.includes('await save(editing,planned,priority)'));
+  assert.ok(table.includes('aria-sort='));
+  assert.ok(table.includes("request.origin==='provisional'?'Sin formulario'"));
+});
+test('store does not save optimistically, passes captured revision and preserves confirmed data after failure',async()=>{
+  const zustandUrl=url(`export const create=()=>initializer=>{let state;const get=()=>state;const set=value=>{state={...state,...(typeof value==='function'?value(state):value)}};state=initializer(set,get);return {getState:get}};`);
+  const persistUrl=url(`export const persist=x=>x;export const createJSONStorage=()=>null;`);
+  const idbUrl=url(`export const openDB=()=>{throw new Error('Unexpected persistence access in unit test')};`);
+  const rpcUrl=url(`let handler;export const setHandler=h=>handler=h;export const CAPACITY_EVENT_ID='test-event';export const getSupabaseClient=()=>({rpc:(...args)=>handler(...args)});`);
+  const {setHandler}=await import(rpcUrl);
+  const compiled=compile('../src/store/planning-store.ts').replace("'zustand'",JSON.stringify(zustandUrl))
+    .replace("'zustand/middleware'",JSON.stringify(persistUrl)).replace("'idb'",JSON.stringify(idbUrl))
+    .replace("'@/src/services/source-normalization'",JSON.stringify(normalizationUrl))
+    .replace("'@/src/services/shared-planning'",JSON.stringify(sharedUrl)).replace("'@/src/services/supabase'",JSON.stringify(rpcUrl));
+  const {usePlanningStore:store}=await import(url(compiled));
+  store.getState().importRequests([request]);store.getState().setSharedPlanningReady(true);
+  let complete;let sent;
+  setHandler((name,args)=>{assert.equal(name,'fbf_set_plan');sent=args;return new Promise(resolve=>{complete=resolve})});
+  const saving=store.getState().savePlanning(request,plan.planned_date,plan.priority);
+  assert.equal(store.getState().requests[0].fechaDefinitiva,null);
+  assert.equal(store.getState().planningBusy,true);
+  assert.equal(sent.p_revision,null);
+  assert.equal('p_updated_by' in sent,false);
+  complete({data:plan,error:null});assert.equal(await saving,null);
+  assert.equal(store.getState().requests[0].planningUpdatedBy,plan.updated_by);
+  assert.equal(store.getState().requests[0].fechaDefinitiva,plan.planned_date);
+  const captured=store.getState().requests[0];
+  setHandler((name,args)=>{assert.equal(args.p_revision,plan.revision);return {data:null,error:{code:'40001'}}});
+  assert.match(await store.getState().savePlanning(captured,null,'Normal'),/Otro integrante/);
+  assert.equal(store.getState().requests[0].fechaDefinitiva,plan.planned_date);
+  assert.equal(store.getState().sharedPlanningReady,false);
+  assert.equal(store.getState().planningBusy,false);
+});

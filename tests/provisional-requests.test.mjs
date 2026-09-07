@@ -9,7 +9,8 @@ function compile(path) {
 const url=code=>'data:text/javascript;base64,'+Buffer.from(code).toString('base64');
 const normalizationUrl=url(compile('../src/services/source-normalization.ts'));
 const {mergeSourceRequests}=await import(normalizationUrl);
-const snapshotCode=compile('../src/services/planner-snapshot.ts').replace("'./source-normalization'",JSON.stringify(normalizationUrl)).replace('"./source-normalization"',JSON.stringify(normalizationUrl));
+const sharedPlanningUrl=url(compile('../src/services/shared-planning.ts'));
+const snapshotCode=compile('../src/services/planner-snapshot.ts').replace("'./shared-planning'",JSON.stringify(sharedPlanningUrl)).replace("'./source-normalization'",JSON.stringify(normalizationUrl)).replace('"./source-normalization"',JSON.stringify(normalizationUrl));
 const {parsePlannerSnapshot}=await import(url(snapshotCode));
 const provisional={number:'TEST-PROVISIONAL',seller_id:'',seller:'Fixture seller',warehouse:'7002',units:80,planned_date:'2026-09-14',priority:'Alta',comment:'Fixture only',revision:'00000000-0000-4000-8000-000000000001',created_at:'2026-09-03T12:00:00Z',official:false};
 const raw={creado:'03/09/2026',seller_id:'fixture-id',seller:'Fixture official',node_id:'7002',fecha_envio:'15/09/2026',estado:'Recibido',number:provisional.number,units:'100',fecha_ini:'14/09/2026',fecha_fin:'18/09/2026'};

@@ -37,6 +37,9 @@ export function createAgendaWorkbook(requests: AgendaRequest[], exportedAt = new
       rows[index].push(validations === undefined ? 'No consultada' : approval?.approved ? `Validada · ${approval.updated_by??'Equipo'} · ${approval.updated_at}` : 'Pendiente');
     }
   });
+  header.push('Creado (formulario)', 'Última modificación por', 'Última modificación (UTC)', 'Guardado compartido');
+  scheduled.forEach((row,index)=>rows[index].push(row.origin==='provisional'?'':row.fechaCreacion,
+    row.planningUpdatedBy??'',row.planningUpdatedAt??'',row.planningRevision?'Sí':row.origin==='provisional'?'Reserva compartida':'Sin guardar / local'));
   const agenda = XLSX.utils.aoa_to_sheet([header, ...rows], { dateNF: 'yyyy-mm-dd' });
   agenda['!autofilter'] = { ref: agenda['!ref']! };
   agenda['!cols'] = header.map((_, index) => ({ wch: [4, 9, 15].includes(index) ? 45 : 24 }));
@@ -57,7 +60,7 @@ export function createAgendaWorkbook(requests: AgendaRequest[], exportedAt = new
     ['Exportado el (UTC)', exportedAt.toISOString()],
     ['Alcance', 'Todas las solicitudes con fecha asignada, ambas bodegas y todas las semanas. Incluye provisorias y solicitudes con alertas.'],
     ['Cantidad de agendas', scheduled.length],
-    ['Planificación', 'Copia de lo cargado en este navegador al exportar. Las ediciones posteriores de fechas y prioridades oficiales son locales.'],
+    ['Planificación', 'Última copia cargada al exportar. Los nuevos cambios se guardan en Supabase; las decisiones antiguas locales se identifican en Guardado compartido.'],
     ['Datos de origen', 'Valores de la última copia disponible, sin modificar la hoja de Google Sheets. Las provisorias no tienen fila de formulario.'],
     ['Privacidad', 'Archivo para compartir por los canales autorizados del equipo. Puede contener información de sellers.'],
   ]), 'Información');

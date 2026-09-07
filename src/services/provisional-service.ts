@@ -1,5 +1,6 @@
 import { CAPACITY_EVENT_ID, getSupabaseClient } from './supabase';
 import type { Priority, WarehouseId } from '@/src/types/planning';
+import { planningSync } from './shared-planning';
 
 export interface ProvisionalInput {
   number: string; seller_id: string; seller: string; warehouse: WarehouseId;
@@ -15,16 +16,22 @@ function message(code?: string, detail?: string) {
 export async function saveProvisional(row: ProvisionalInput, revision: string|null) {
   const client=getSupabaseClient();
   if(!client) return {error:'Se requiere conexión con Supabase.'};
+  if(planningSync.busy) return {error:'Espera a que termine el guardado actual.'};
+  planningSync.busy=true; ++planningSync.epoch;
   try {
     const {data,error}=await client.rpc('fbf_save_provisional',{p_event_id:CAPACITY_EVENT_ID,p_row:row,p_revision:revision});
     return {error:error?message(error.code,error.message):data?.ok===true?null:message()};
   } catch { return {error:message()}; }
+  finally { ++planningSync.epoch; planningSync.busy=false; }
 }
 export async function deleteProvisional(number: string, revision: string) {
   const client=getSupabaseClient();
   if(!client) return {error:'Se requiere conexión con Supabase.'};
+  if(planningSync.busy) return {error:'Espera a que termine el guardado actual.'};
+  planningSync.busy=true; ++planningSync.epoch;
   try {
     const {data,error}=await client.rpc('fbf_delete_provisional',{p_event_id:CAPACITY_EVENT_ID,p_number:number,p_revision:revision});
     return {error:error?message(error.code,error.message):data?.ok===true?null:message()};
   } catch { return {error:message()}; }
+  finally { ++planningSync.epoch; planningSync.busy=false; }
 }

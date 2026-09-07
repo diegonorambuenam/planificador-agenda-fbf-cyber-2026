@@ -26,6 +26,9 @@ function AgendaWorkspace({ warehouse, onWarehouseChange }: { warehouse: Warehous
   const requests = usePlanningStore(state => state.requests);
   const capacities = usePlanningStore(state => state.capacities);
   const assignNumber = usePlanningStore(state => state.assignNumber);
+  const planningReady = usePlanningStore(state => state.sharedPlanningReady);
+  const planningBusy = usePlanningStore(state => state.planningBusy);
+  const [planningMessage,setPlanningMessage] = useState('');
   const validation = useValidations();
   const [anchor,setAnchor] = useState(new Date('2026-09-14T12:00:00'));
   const [mode,setMode] = useState<'calendar'|'table'>('calendar');
@@ -52,13 +55,14 @@ function AgendaWorkspace({ warehouse, onWarehouseChange }: { warehouse: Warehous
   const scheduledUnits=warehouseRequests.filter(request=>request.fechaDefinitiva).reduce((sum,request)=>sum+request.units,0);
   const setFilter=(key:keyof AgendaFilters,value:string)=>setFilters(old=>({...old,[key]:value}));
 
-  function handleDragEnd(event: DragEndEvent) {
+  async function handleDragEnd(event: DragEndEvent) {
     const number = String(event.active.id).replace(/^(number|scheduled):/, '');
     const request = requests.find((item) => item.number === number);
     const target = event.over?.id ? String(event.over.id) : '';
     setActiveNumber(null);
     if (!request || !target || !canMoveRequest(request)) return;
-    if (target === 'pending-drop') { assignNumber(number, null); return; }
+    if(!planningReady||planningBusy) {setPlanningMessage('Espera a consultar la planificación compartida antes de mover.');return;}
+    if (target === 'pending-drop') { setPlanningMessage(await assignNumber(number, null)??'Cambio guardado para el equipo.'); return; }
     if (!target.startsWith('day:')) return;
     if (request.warehouse !== warehouse) {
       window.alert(request.warehouse ? `Selecciona la bodega ${request.warehouse} para mover esta solicitud.` : 'Esta solicitud no tiene una bodega válida. Corrígela en el origen antes de asignarle un día.');
@@ -72,7 +76,7 @@ function AgendaWorkspace({ warehouse, onWarehouseChange }: { warehouse: Warehous
     else if (metrics.used + request.units > metrics.capacity) warnings.push(`La asignación dejará ${numberFormat.format(metrics.used + request.units - metrics.capacity)} unidades sobre capacidad.`);
     if (!isWithinWindow(request, date)) warnings.push(`La fecha está fuera de la ventana ${request.fechaInicio} → ${request.fechaFin}.`);
     if (warnings.length && !window.confirm(`${warnings.join('\n\n')}\n\n¿Quieres continuar?`)) return;
-    assignNumber(number, date);
+    setPlanningMessage(await assignNumber(number, date)??'Cambio guardado para el equipo.');
   }
 
 
@@ -104,7 +108,9 @@ function AgendaWorkspace({ warehouse, onWarehouseChange }: { warehouse: Warehous
         <div className="ml-auto"><ExportAgendasButton requests={requests} /></div>
       </div>
       {validation.error&&<p role="status" className="mb-2 text-xs text-amber-800">{validation.error}</p>}
-      {mode==='table'?<AgendaTable requests={visible}/>:<section className="grid min-h-[600px] grid-cols-1 gap-3 xl:grid-cols-[290px_minmax(0,1fr)]">
+      {planningMessage&&<p role="status" className="mb-2 text-xs text-[#607168]">{planningMessage}</p>}
+      {planningBusy&&<p role="status" className="mb-2 text-xs">Guardando planificación compartida…</p>}
+      {mode==='table'?<AgendaTable requests={visible} filterKey={JSON.stringify([filters,tableWarehouse])}/>:<section className="grid min-h-[600px] grid-cols-1 gap-3 xl:grid-cols-[290px_minmax(0,1fr)]">
         <PendingTray visible={trayRequests} grouped={grouped} setGrouped={setGrouped}/>
         <div className="overflow-x-auto rounded-xl border border-[#d7e0da] bg-white">
           <div className="flex flex-wrap justify-between gap-2 border-b px-3 py-2 text-xs text-[#607168]"><span>Arrastra un number al día objetivo</span><span>Ocupación e indicadores totales, sin filtros</span></div>

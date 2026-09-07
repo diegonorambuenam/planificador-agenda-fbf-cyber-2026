@@ -1,10 +1,12 @@
 import { normalizeRows, SOURCE_COLUMNS, sourceDate, type RawRow } from './source-normalization';
 import type { AgendaRequest, Priority, WarehouseId } from '@/src/types/planning';
+import { applySharedPlan, parseSharedPlans } from './shared-planning';
 
 export interface ProvisionalRow {
   number: string; seller_id: string; seller: string; warehouse: WarehouseId;
   units: number; planned_date: string; priority: Priority; comment: string;
   revision: string; created_at: string; official: boolean;
+  updated_at?: string; updated_by?: string|null;
 }
 interface SourceSnapshot {
   source_refreshed_at: string; received_at: string; row_count: number;
@@ -12,7 +14,7 @@ interface SourceSnapshot {
 }
 
 export function parsePlannerSnapshot(data: unknown) {
-  const value = data as {source: SourceSnapshot|null; provisionals: ProvisionalRow[]};
+  const value = data as {source: SourceSnapshot|null; provisionals: ProvisionalRow[]; plans?: unknown};
   if (!value || !('source' in value) || !Array.isArray(value.provisionals)) throw new Error('Invalid snapshot');
   const source=value.source;
   if (source && (!Array.isArray(source.rows) || !Number.isInteger(source.row_count) || source.row_count<1 ||
@@ -51,5 +53,13 @@ export function parsePlannerSnapshot(data: unknown) {
     estadoFuente:'Provisoria',fechaDefinitiva:p.planned_date,planningStatus:'Agendado',priority:p.priority,planningComment:p.comment,
     validationStatus:'valid',validationMessages:[],
   } satisfies AgendaRequest);
-  return {requests,source};
+  const sharedPlanningReady=Array.isArray(value.plans);
+  const plans=value.plans===undefined?[]:parseSharedPlans(value.plans);
+  for(const p of provisionals) if(!p.official&&p.updated_at) plans.push(...parseSharedPlans([{...p,origin:'provisional'}]));
+  for(const plan of plans) {
+    const index=requests.findIndex(r=>r.number===plan.number&&r.origin===plan.origin);
+    if(index<0) throw new Error('Planning without matching request');
+    requests[index]=applySharedPlan(requests[index],plan);
+  }
+  return {requests,source,sharedPlanningReady};
 }

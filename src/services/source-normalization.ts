@@ -87,8 +87,9 @@ export function mergeSourceRequests(current: AgendaRequest[], incoming: AgendaRe
     const old=previous.get(row.number);
     if(!old) return row;
     // Shared provisional state is authoritative, including the promotion date.
-    if(row.origin==='provisional' || (old.origin==='provisional' && row.origin==='sheet')) return row;
+    if(row.planningRevision || row.origin==='provisional' || (old.origin==='provisional' && row.origin==='sheet')) return row;
     return {...row,fechaDefinitiva:old.fechaDefinitiva,priority:old.priority,planningComment:old.planningComment,
+      ...(old.planningRevision?{planningRevision:old.planningRevision,planningUpdatedAt:old.planningUpdatedAt,planningUpdatedBy:old.planningUpdatedBy}:{}),
       planningStatus:old.fechaDefinitiva || old.planningStatus==='Rechazado' ? old.planningStatus : row.planningStatus};
   });
   // User-approved cleanup: only known local demos absent from the source are removed.

@@ -51,13 +51,14 @@ export function PlanningShell() {
           additionalProperties: false,
         },
         annotations: { readOnlyHint: false, untrustedContentHint: false },
-        execute(input) {
+        async execute(input) {
           const { number, date } = input as { number?: string; date?: string };
           const state = usePlanningStore.getState();
           const request = state.requests.find((item) => item.number === number);
           if (!request || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Number o fecha inválidos');
           if (request.origin === 'provisional') throw new Error('Edita la fecha compartida desde Provisorias');
-          state.assignNumber(request.number, date);
+          const error=await state.assignNumber(request.number, date);
+          if(error) throw new Error(error);
           return { number: request.number, assignedDate: date, status: 'Agendado' };
         },
       }, { signal: lifecycle.signal });
@@ -67,12 +68,13 @@ export function PlanningShell() {
         description: 'Quita la fecha definitiva de un number y lo devuelve a la bandeja de pendientes.',
         inputSchema: { type: 'object', properties: { number: { type: 'string' } }, required: ['number'], additionalProperties: false },
         annotations: { readOnlyHint: false, untrustedContentHint: false },
-        execute(input) {
+        async execute(input) {
           const { number } = input as { number?: string };
           const state = usePlanningStore.getState();
           if (!number || !state.requests.some((item) => item.number === number)) throw new Error('Number no encontrado');
           if (state.requests.find(item => item.number === number)?.origin === 'provisional') throw new Error('Edita o elimina esta reserva desde Provisorias');
-          state.assignNumber(number, null);
+          const error=await state.assignNumber(number, null);
+          if(error) throw new Error(error);
           return { number, status: 'Pendiente' };
         },
       }, { signal: lifecycle.signal });
@@ -82,7 +84,7 @@ export function PlanningShell() {
   }, []);
 
   function confirmReset() {
-    if (window.confirm('Se eliminarán las fechas definitivas y el historial local. Las capacidades y provisorias compartidas se conservarán. ¿Continuar?')) resetPlanning();
+    if (window.confirm('Se eliminarán solo las fechas y prioridades antiguas no compartidas de este navegador. La planificación, capacidades y provisorias guardadas en Supabase se conservarán. ¿Continuar?')) resetPlanning();
   }
 
   if (shared.configured && (!shared.initialized || (shared.session && shared.authorized == null))) {
@@ -120,7 +122,7 @@ export function PlanningShell() {
       </div>
     </header>
     {shared.configured && <section className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-3 px-5 py-3 text-xs" aria-live="polite">
-      <div><p className="font-bold">{source.message}</p><p className="mt-1 text-[#65756c]">{source.refreshedAt && `${source.count} solicitudes · Fuente actualizada: ${new Date(source.refreshedAt).toLocaleString('es-CL')} · `}Solicitudes, capacidades y provisorias compartidas. La edición posterior de fechas y prioridades de solicitudes oficiales sigue siendo local.</p></div>
+      <div><p className="font-bold">{source.message}</p><p className="mt-1 text-[#65756c]">{source.refreshedAt && `${source.count} solicitudes · Fuente actualizada: ${new Date(source.refreshedAt).toLocaleString('es-CL')} · `}Los nuevos cambios de fecha y prioridad se guardan para el equipo con usuario y hora. Las decisiones antiguas locales se comparten al guardarlas; no se sobrescriben automáticamente.</p></div>
       <Button variant="outline" size="sm" disabled={source.busy} onClick={source.refresh}>{source.busy ? 'Consultando…' : 'Consultar última copia'}</Button>
     </section>}
     <div className="border-b border-[#dce5df] bg-white px-4 py-2 md:hidden"><div className="mx-auto flex max-w-[1800px] gap-1"><NavButton active={view === 'agenda'} onClick={() => setView('agenda')} icon={<Warehouse size={15} />} label="Agenda" /><NavButton active={view === 'capacity'} onClick={() => setView('capacity')} icon={<Gauge size={15} />} label="Capacidad" /><NavButton active={view === 'import'} onClick={() => setView('import')} icon={<Upload size={15} />} label="Importar" /><NavButton active={view === 'provisionals'} onClick={() => setView('provisionals')} icon={<CalendarDays size={15} />} label="Provisorias" /></div></div>
